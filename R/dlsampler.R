@@ -1,0 +1,118 @@
+#' Code for paper is given at https://github.com/debdeeptamu/Dirichlet_Laplace/blob/master/DL.m
+
+#' @export
+dl.beta <- function(XtX, Xty, sig.sq, tau.sq, psi, phi) {
+
+  if (is.matrix(XtX)) {
+
+    p <- nrow(XtX)
+
+    phiphit <- tcrossprod(phi*sqrt(tau.sq*psi))
+    A <- (XtX/sig.sq)*(phiphit) + diag(p)
+    A.inv <- solve(A)*phiphit
+    mean <- crossprod(A.inv, Xty/sig.sq)
+    var <- A.inv
+
+    return(crossprod(chol(var), rnorm(p)) + mean)
+  } else if (is.vector(XtX)) {
+    p <- length(XtX)
+
+    A <- XtX/sig.sq + 1/(tau.sq*psi*phi^2)
+    A.inv <- 1/(A)
+    mean <- A.inv*Xty/sig.sq
+    var <- A.inv
+
+    return(sqrt(var)*rnorm(p) + mean)
+  }
+}
+
+# Generates inverse gaussian rv's based on
+# https://www.jstor.org/stable/2683801?origin=crossref, as described on Wiki page for
+# inverse gaussian distribution https://en.wikipedia.org/wiki/Inverse_Gaussian_distribution#cite_note-2
+#' @export
+rinvgauss <- function(p, mu, lambda) {
+  v <- rnorm(p)
+  y <- v^2
+  x <- mu + mu^2*y/(2*lambda) - (mu/(2*lambda))*sqrt(4*mu*lambda*y + mu^2*y^2)
+  z <- runif(p)
+  return(ifelse(z <= mu/(mu + x), x, mu^2/x))
+}
+
+#' @export
+dl.psi <- function(beta, tau.sq, phi) {
+  p <- length(beta)
+  psi.tilde <- rinvgauss(p, mu = phi*sqrt(tau.sq)/abs(beta), lambda = rep(1, p))
+  return(1/psi.tilde)
+}
+
+#' @export
+dl.tau <- function(beta, phi, a) {
+  p <- length(beta)
+  return(GIGrvg::rgig(1, lambda = p*a - p, psi = 1, chi = 2*sum(abs(beta/(phi)))))
+}
+
+# Uses slice sampling algorithm of Damien, Wakefield and Walker (1999)
+#' @export
+dl.phi <- function(beta, a, s) {
+  # - Draw slice variable
+  u <- runif(p, 0, exp(-1/(2*s)))
+  # - Convert slice variable to lower bound on s
+  lb <- 1/(2*log(1/u))
+  # - Find the gamma cdf value that corresponds to this lower bound
+  Flb <- pgamma(lb, shape = 1 - a, rate = abs(beta))
+  # - Use inverse CDF method to draw gamma random variable
+  uu <- pmin(runif(p, Flb, 1), 1-(1e-16))
+  s <- qgamma(uu,shape = 1-a,rate = abs(beta))
+  # - Convert back to t and phi
+  t <- 1/s
+  phi <- t/sum(t)
+  phi[phi <= (1e-20)] <- (1e-20)
+  return(list("phi" = phi, "s" = s))
+}
+
+#' @export
+dl.sampler <- function(y, X, a, sig.sq, num.samp = 10000,
+                       burn.in = 0, thin = 1,
+                       print.iter = FALSE) {
+
+  p <- ncol(X)
+  n <- nrow(X)
+
+  XtX <- crossprod(X)
+  if (max(abs(XtX[lower.tri(XtX, diag = FALSE)])) == 0) {
+    diagX <- TRUE
+    XtX <- diag(crossprod(X))
+  }
+  Xty <- crossprod(X, y)
+
+  betas <- psis <- phis <- matrix(nrow = num.samp, ncol = p)
+  taus <- numeric(num.samp)
+
+  # Starting values
+  psi <- t <- s <- rep(1, p)
+  phi <- t/sum(t)
+  tau <- 1
+
+
+  for (i in 1:(num.samp*thin + burn.in)) {
+
+    if (print.iter) {cat("i = ", i, "\n")}
+
+    beta <- dl.beta(XtX = XtX, Xty = Xty, sig.sq = sig.sq, tau.sq = tau^2, psi = psi, phi = phi)
+    psi <- dl.psi(beta = beta, tau.sq = tau^2, phi = phi)
+    tau <- dl.tau(beta = beta, phi = phi, a = a)
+    samp.phi <- dl.phi(beta = beta, a = a, s = s)
+    phi <- samp.phi$phi
+    s <- samp.phi$s
+
+    if (i > burn.in & (i - burn.in)%%thin == 0) {
+      betas[(i - burn.in)/thin, ] <- beta
+      psis[(i - burn.in)/thin, ] <- psi
+      phis[(i - burn.in)/thin, ] <- phi
+      taus[(i - burn.in)/thin] <- tau
+    }
+  }
+
+  return(list("betas" = betas, "psis" = psis, "phis" = phis, "taus" = taus))
+
+}
