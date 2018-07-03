@@ -1,13 +1,13 @@
 #' Code for paper is given at https://github.com/debdeeptamu/Dirichlet_Laplace/blob/master/DL.m
 
 #' @export
-dl.beta <- function(XtX, Xty, sig.sq, tau.sq, psi, phi) {
+dl.beta <- function(XtX, Xty, sig.sq, psi, lambda) {
 
   if (is.matrix(XtX)) {
 
     p <- nrow(XtX)
 
-    phiphit <- tcrossprod(phi*sqrt(tau.sq*psi))
+    phiphit <- tcrossprod(lambda*sqrt(psi))
     A <- (XtX/sig.sq)*(phiphit) + diag(p)
     A.inv <- solve(A)*phiphit
     mean <- crossprod(A.inv, Xty/sig.sq)
@@ -17,7 +17,7 @@ dl.beta <- function(XtX, Xty, sig.sq, tau.sq, psi, phi) {
   } else if (is.vector(XtX)) {
     p <- length(XtX)
 
-    A <- XtX/sig.sq + 1/(tau.sq*psi*phi^2)
+    A <- XtX/sig.sq + 1/(lambda^2*psi)
     A.inv <- 1/(A)
     mean <- A.inv*Xty/sig.sq
     var <- A.inv
@@ -51,6 +51,13 @@ dl.tau <- function(beta, phi, a) {
   return(GIGrvg::rgig(1, lambda = p*a - p, psi = 1, chi = 2*sum(abs(beta/(phi)))))
 }
 
+#' @export
+dl.lambda <- function(beta, a) {
+  p <- length(beta)
+  # return(GIGrvg::rgig(p, lambda = a - 1, psi = 1, chi = 2*abs(beta)))
+  return(GIGrvg::rgig(p, lambda = 1 - a, chi = 1, psi = 2*abs(beta)))
+}
+
 # Uses slice sampling algorithm of Damien, Wakefield and Walker (1999)
 #' @export
 dl.phi <- function(beta, a, s) {
@@ -73,7 +80,7 @@ dl.phi <- function(beta, a, s) {
 #' @export
 dl.sampler <- function(y, X, a, sig.sq, num.samp = 10000,
                        burn.in = 0, thin = 1,
-                       print.iter = FALSE) {
+                       print.iter = FALSE, lambdapar = TRUE) {
 
   p <- ncol(X)
   n <- nrow(X)
@@ -85,34 +92,62 @@ dl.sampler <- function(y, X, a, sig.sq, num.samp = 10000,
   }
   Xty <- crossprod(X, y)
 
-  betas <- psis <- phis <- matrix(nrow = num.samp, ncol = p)
-  taus <- numeric(num.samp)
+  betas <- psis <- matrix(nrow = num.samp, ncol = p)
+  if (!lambdapar) {
+    phis <- matrix(nrow = num.samp, ncol = p)
+    taus <- numeric(num.samp)
+  } else {
+    lambdas <- matrix(nrow = num.samp, ncol = p)
+  }
 
   # Starting values
-  psi <- t <- s <- rep(1, p)
-  phi <- t/sum(t)
-  tau <- 1
+  psi <- rep(1, p)
+  if (!lambdapar) {
+    t <- s <- rep(1, p)
+    phi <- t/sum(t)
+    tau <- 1
+    lambda <- phi*tau
+  } else {
+    lambda <- rep(1, p)
+  }
 
 
   for (i in 1:(num.samp*thin + burn.in)) {
 
     if (print.iter) {cat("i = ", i, "\n")}
 
-    beta <- dl.beta(XtX = XtX, Xty = Xty, sig.sq = sig.sq, tau.sq = tau^2, psi = psi, phi = phi)
+    beta <- dl.beta(XtX = XtX, Xty = Xty, sig.sq = sig.sq, psi = psi,
+                    lambda = lambda)
     psi <- dl.psi(beta = beta, tau.sq = tau^2, phi = phi)
-    tau <- dl.tau(beta = beta, phi = phi, a = a)
-    samp.phi <- dl.phi(beta = beta, a = a, s = s)
-    phi <- samp.phi$phi
-    s <- samp.phi$s
+
+    if (!lambdapar) {
+      tau <- dl.tau(beta = beta, phi = phi, a = a)
+      samp.phi <- dl.phi(beta = beta, a = a, s = s)
+      phi <- samp.phi$phi
+      s <- samp.phi$s
+      lambda <- phi*tau
+    } else {
+      lambda <- dl.lambda(beta = beta, a = a)
+    }
 
     if (i > burn.in & (i - burn.in)%%thin == 0) {
       betas[(i - burn.in)/thin, ] <- beta
       psis[(i - burn.in)/thin, ] <- psi
-      phis[(i - burn.in)/thin, ] <- phi
-      taus[(i - burn.in)/thin] <- tau
+      if (!lambdapar) {
+        phis[(i - burn.in)/thin, ] <- phi
+        taus[(i - burn.in)/thin] <- tau
+      } else {
+        lambdas[(i - burn.in)/thin, ] <- lambda
+      }
     }
   }
 
-  return(list("betas" = betas, "psis" = psis, "phis" = phis, "taus" = taus))
+  if (!lambdapar) {
+    res <- list("betas" = betas, "psis" = psis, "phis" = phis, "taus" = taus)
+  } else {
+    res <- list("betas" = betas, "psis" = psis, "lambdas" = lambdas)
+  }
+
+  return(res)
 
 }

@@ -4,7 +4,7 @@
 \alias{dl.beta}
 \title{Code for paper is given at https://github.com/debdeeptamu/Dirichlet_Laplace/blob/master/DL.m}
 \usage{
-dl.beta(XtX, Xty, sig.sq, tau.sq, psi, phi)
+dl.beta(XtX, Xty, sig.sq, psi, lambda)
 }
 \description{
 Code for paper is given at https://github.com/debdeeptamu/Dirichlet_Laplace/blob/master/DL.m
