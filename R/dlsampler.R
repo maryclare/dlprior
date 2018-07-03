@@ -1,4 +1,10 @@
 #' Code for paper is given at https://github.com/debdeeptamu/Dirichlet_Laplace/blob/master/DL.m
+#' @export
+sym.sq.root <- function(A) {
+  A.eig <- eigen((A + t(A))/2)
+  crossprod(t(A.eig$vectors), tcrossprod(diag(sqrt(ifelse(A.eig$values > 0, A.eig$values, 0)),
+                                              nrow = nrow(A), ncol = ncol(A)), A.eig$vectors))
+}
 
 #' @export
 dl.beta <- function(XtX, Xty, sig.sq, psi, lambda) {
@@ -13,7 +19,7 @@ dl.beta <- function(XtX, Xty, sig.sq, psi, lambda) {
     mean <- crossprod(A.inv, Xty/sig.sq)
     var <- A.inv
 
-    return(crossprod(chol(var), rnorm(p)) + mean)
+    return(crossprod(sym.sq.root(var), rnorm(p)) + mean)
   } else if (is.vector(XtX)) {
     p <- length(XtX)
 
