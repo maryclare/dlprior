@@ -1,4 +1,5 @@
 #' Code for paper is given at https://github.com/debdeeptamu/Dirichlet_Laplace/blob/master/DL.m
+
 #' @export
 sym.sq.root <- function(A) {
   A.eig <- eigen((A + t(A))/2)
@@ -12,18 +13,20 @@ dl.beta <- function(XtX, Xty, sig.sq, psi, lambda) {
   if (is.matrix(XtX)) {
 
     p <- nrow(XtX)
-
-    phiphit <- tcrossprod(lambda*sqrt(psi))
+    diagonals <- exp(log(lambda) + log(psi)/2)
+    phiphit <- tcrossprod(diagonals)
     A <- (XtX/sig.sq)*(phiphit) + diag(p)
-    A.inv <- solve(A)*phiphit
-    mean <- crossprod(A.inv, Xty/sig.sq)
-    var <- A.inv
-
-    return(crossprod(sym.sq.root(var), rnorm(p)) + mean)
+    A.inv <- solve(A)
+    mean <- crossprod(A.inv*phiphit, Xty/sig.sq)
+    # cat("Diagonals\n")
+    # print(summary(psi)) # sqrt(psi)
+    # cat("A.inv\n")
+    # print(summary(c(abs(A.inv))))
+    return(crossprod(t(tcrossprod(diagonals, rep(1, p))*sym.sq.root(A.inv)), rnorm(p)) + mean)
   } else if (is.vector(XtX)) {
     p <- length(XtX)
 
-    A <- XtX/sig.sq + 1/(lambda^2*psi)
+    A <- XtX/sig.sq + 1/(exp(2*log(lambda) + log(psi)))
     A.inv <- 1/(A)
     mean <- A.inv*Xty/sig.sq
     var <- A.inv
@@ -32,23 +35,18 @@ dl.beta <- function(XtX, Xty, sig.sq, psi, lambda) {
   }
 }
 
-# Generates inverse gaussian rv's based on
-# https://www.jstor.org/stable/2683801?origin=crossref, as described on Wiki page for
-# inverse gaussian distribution https://en.wikipedia.org/wiki/Inverse_Gaussian_distribution#cite_note-2
-#' @export
-rinvgauss <- function(p, mu, lambda) {
-  v <- rnorm(p)
-  y <- v^2
-  x <- mu + mu^2*y/(2*lambda) - (mu/(2*lambda))*sqrt(4*mu*lambda*y + mu^2*y^2)
-  z <- runif(p)
-  return(ifelse(z <= mu/(mu + x), x, mu^2/x))
-}
-
 #' @export
 dl.psi <- function(beta, lambda) {
   p <- length(beta)
-  psi.tilde <- rinvgauss(p, mu = lambda/abs(beta), lambda = rep(1, p))
+
+  psi.tilde <- statmod::rinvgauss(p, mean = lambda/abs(beta), shape = rep(1, p))
   return(1/psi.tilde)
+  # return(1/GIGrvg::rgig(p, lambda = -1/2, chi = 1, psi = beta^2/lambda^2))
+  # return(GIGrvg::rgig(p, lambda = 1/2, psi = 1, chi = beta^2/lambda^2)) # Gives same results as above
+
+  # I compared statmod::rinvgauss, an inverse gaussian generator from Wikipedia used in Debdeep's code and
+  # GIGrvg::rgig
+  # - the Wiki generator and GIGrvg::rgig generators were all numerically unstable/performed poorly for very large mu, lambda/abs(beta)
 }
 
 #' @export
