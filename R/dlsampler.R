@@ -39,9 +39,9 @@ rinvgauss <- function(p, mu, lambda) {
 }
 
 #' @export
-dl.psi <- function(beta, tau.sq, phi) {
+dl.psi <- function(beta, lambda) {
   p <- length(beta)
-  psi.tilde <- rinvgauss(p, mu = phi*sqrt(tau.sq)/abs(beta), lambda = rep(1, p))
+  psi.tilde <- rinvgauss(p, mu = lambda/abs(beta), lambda = rep(1, p))
   return(1/psi.tilde)
 }
 
@@ -118,7 +118,7 @@ dl.sampler <- function(y, X, a, sig.sq, num.samp = 10000,
 
     beta <- dl.beta(XtX = XtX, Xty = Xty, sig.sq = sig.sq, psi = psi,
                     lambda = lambda)
-    psi <- dl.psi(beta = beta, tau.sq = tau^2, phi = phi)
+    psi <- dl.psi(beta = beta, lambda = lambda)
 
     if (!lambdapar) {
       tau <- dl.tau(beta = beta, phi = phi, a = a)
