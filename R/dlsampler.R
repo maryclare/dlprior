@@ -52,13 +52,13 @@ dl.psi <- function(beta, lambda) {
 #' @export
 dl.tau <- function(beta, phi, a) {
   p <- length(beta)
-  return(.Call("rgig", n = 1, lambda = p*a - p, psi = 1, chi = 2*sum(abs(beta/(phi))), PACKAGE = "GIGrvg"))
+  return(GIGrvg::rgig(1, lambda = p*a - p, psi = 1, chi = 2*sum(abs(beta/(phi)))))
 }
 
 #' @export
 dl.lambda <- function(beta, a) {
   p <- length(beta)
-  return(.Call("rgig", n = p, lambda = 1 - a, chi = 1, psi = 2*abs(beta), PACKAGE = "GIGrvg"))
+  return(GIGrvg::rgig(p, lambda = 1 - a, chi = 1, psi = 2*abs(beta)))
 }
 
 # Uses slice sampling algorithm of Damien, Wakefield and Walker (1999)
