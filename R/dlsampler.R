@@ -8,6 +8,12 @@ sym.sq.root <- function(A) {
 }
 
 #' @export
+ei.inv <- function(A) {
+  A.eig <- eigen(A)
+  crossprod(t(A.eig$vectors), tcrossprod(diag(ifelse(A.eig$values > 0, 1/A.eig$values, 0)), A.eig$vectors))
+}
+
+#' @export
 dl.beta <- function(XtX, Xty, sig.sq, psi, lambda) {
 
   if (is.matrix(XtX)) {
@@ -16,7 +22,7 @@ dl.beta <- function(XtX, Xty, sig.sq, psi, lambda) {
     diagonals <- exp(log(lambda) + log(psi)/2)
     phiphit <- tcrossprod(diagonals)
     A <- (XtX/sig.sq)*(phiphit) + diag(p)
-    A.inv <- solve(A)
+    A.inv <- ei.inv(A)
     mean <- crossprod(A.inv*phiphit, Xty/sig.sq)
     # cat("Diagonals\n")
     # print(summary(psi)) # sqrt(psi)
